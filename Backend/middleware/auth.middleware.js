@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User.model");
+const { JWT_SECRET } = require("../config/constants");
 
 const authMiddleware = async (req, res, next) => {
   try {
@@ -11,8 +12,8 @@ const authMiddleware = async (req, res, next) => {
         .json({ error: "Access denied. No token provided." });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.userId).select("-password");
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const user = User.findById(decoded.id);
 
     if (!user) {
       return res.status(401).json({ error: "Invalid token. User not found." });

@@ -17,6 +17,7 @@ import ReportFound from "./components/ReportFound";
 import ItemList from "./components/ItemList";
 import ItemDetail from "./components/ItemDetail";
 import Navbar from "./components/Navbar";
+import AdminDashboard from "./components/AdminDashboard";
 
 // Configure axios
 axios.defaults.baseURL = "http://localhost:5000/api";
@@ -34,8 +35,11 @@ function App() {
         const parsedUser = JSON.parse(userData);
         setUser(parsedUser);
         axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+        console.log("User restored:", parsedUser);
       } catch (error) {
         console.error("Error loading user:", error);
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
       }
     }
     setLoading(false);
@@ -89,6 +93,16 @@ function App() {
               path="/dashboard"
               element={
                 user ? <Dashboard user={user} /> : <Navigate to="/login" />
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                user && user.role === "admin" ? (
+                  <AdminDashboard user={user} />
+                ) : (
+                  <Navigate to="/dashboard" />
+                )
               }
             />
             <Route

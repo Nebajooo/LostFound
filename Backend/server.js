@@ -1,51 +1,105 @@
 const express = require("express");
-const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const app = express();
-
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Simple in-memory storage (no MongoDB required for testing)
+// In-memory database
 const users = [];
 const items = [];
 const claims = [];
 
-console.log("🚀 Starting server without MongoDB for testing...");
+// Create default admin
+const createDefaultAdmin = async () => {
+  const adminExists = users.find((u) => u.email === "admin@lostfound.com");
+  if (!adminExists) {
+    const hashedPassword = await bcrypt.hash("admin123", 10);
+    users.push({
+      id: 1,
+      name: "System Administrator",
+      email: "admin@lostfound.com",
+      password: hashedPassword,
+      studentId: "ADMIN001",
+      university: "University System",
+      role: "admin",
+      createdAt: new Date(),
+    });
+    console.log("\n✅ Admin Created: admin@lostfound.com / admin123\n");
+  }
+};
 
-// ============ HEALTH CHECK ============
+// Auth middleware
+const authMiddleware = async (req, res, next) => {
+  try {
+    const token = req.header("Authorization")?.replace("Bearer ", "");
+    if (!token) return res.status(401).json({ error: "No token" });
+
+    const decoded = jwt.verify(token, "secret123");
+    const user = users.find((u) => u.id === decoded.id);
+    if (!user) return res.status(401).json({ error: "User not found" });
+
+    req.user = user;
+    next();
+  } catch (error) {
+    res.status(401).json({ error: "Invalid token" });
+  }
+};
+
+// Admin middleware
+const adminMiddleware = (req, res, next) => {
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
+};
+
+// Helper: Calculate claim score
+const calculateScore = (answers, privateDetails) => {
+  let score = 0,
+    total = 0;
+  for (const [key, answer] of Object.entries(answers)) {
+    if (privateDetails[key]) {
+      total += 10;
+      if (
+        answer?.toLowerCase().trim() ===
+        privateDetails[key].toLowerCase().trim()
+      ) {
+        score += 10;
+      }
+    }
+  }
+  return total > 0 ? (score / total) * 100 : 0;
+};
+
+// ========== PUBLIC ROUTES ==========
 app.get("/api/health", (req, res) => {
   res.json({
     status: "OK",
-    message: "Server is running",
     users: users.length,
     items: items.length,
+    claims: claims.length,
   });
 });
-
-// ============ AUTH ROUTES ============
 
 // Register
 app.post("/api/auth/register", async (req, res) => {
   try {
     const { name, email, password, studentId, university, phone } = req.body;
 
-    console.log("Register attempt:", { name, email, studentId });
-
-    // Check if user exists
-    const existingUser = users.find((u) => u.email === email);
-    if (existingUser) {
+    if (!name || !email || !password || !studentId || !university) {
+      return res.status(400).json({ error: "All fields required" });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: "Password must be 6+ characters" });
+    }
+    if (users.find((u) => u.email === email)) {
       return res.status(400).json({ error: "Email already registered" });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user
     const user = {
       id: users.length + 1,
       name,
@@ -54,29 +108,16 @@ app.post("/api/auth/register", async (req, res) => {
       studentId,
       university,
       phone: phone || "",
-      role: "student",
+      role: email === "admin@lostfound.com" ? "admin" : "student",
+      createdAt: new Date(),
     };
-
     users.push(user);
 
-    // Create token
-    const token = jwt.sign({ id: user.id, email: user.email }, "secret123", {
-      expiresIn: "7d",
-    });
-
-    console.log("✅ User registered:", user.email);
-
-    res.status(201).json({
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-      token,
-    });
+    const token = jwt.sign({ id: user.id }, "secret123");
+    res
+      .status(201)
+      .json({ user: { id: user.id, name, email, role: user.role }, token });
   } catch (error) {
-    console.error("Register error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -85,28 +126,13 @@ app.post("/api/auth/register", async (req, res) => {
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    console.log("Login attempt:", email);
-
-    // Find user
     const user = users.find((u) => u.email === email);
-    if (!user) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
+    if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
-    // Check password
     const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
+    if (!isValid) return res.status(401).json({ error: "Invalid credentials" });
 
-    // Create token
-    const token = jwt.sign({ id: user.id, email: user.email }, "secret123", {
-      expiresIn: "7d",
-    });
-
-    console.log("✅ User logged in:", user.email);
-
+    const token = jwt.sign({ id: user.id }, "secret123");
     res.json({
       user: {
         id: user.id,
@@ -117,66 +143,15 @@ app.post("/api/auth/login", async (req, res) => {
       token,
     });
   } catch (error) {
-    console.error("Login error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get current user
-app.get("/api/auth/me", (req, res) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) {
-    return res.status(401).json({ error: "No token provided" });
-  }
-
-  try {
-    const decoded = jwt.verify(token, "secret123");
-    const user = users.find((u) => u.id === decoded.id);
-    if (!user) {
-      return res.status(401).json({ error: "User not found" });
-    }
-
-    res.json({
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-    });
-  } catch (error) {
-    res.status(401).json({ error: "Invalid token" });
-  }
-});
-
-// ============ ITEM ROUTES ============
-
-// Auth middleware
-const auth = (req, res, next) => {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) {
-    return res.status(401).json({ error: "No token provided" });
-  }
-
-  try {
-    const decoded = jwt.verify(token, "secret123");
-    const user = users.find((u) => u.id === decoded.id);
-    if (!user) {
-      return res.status(401).json({ error: "User not found" });
-    }
-    req.user = user;
-    next();
-  } catch (error) {
-    res.status(401).json({ error: "Invalid token" });
-  }
-};
-
-// Report lost item
-app.post("/api/items/lost", auth, (req, res) => {
+// ========== ITEM ROUTES ==========
+app.post("/api/items/lost", authMiddleware, (req, res) => {
   try {
     const { category, title, description, location, date, privateDetails } =
       req.body;
-
     const item = {
       id: items.length + 1,
       type: "lost",
@@ -184,31 +159,24 @@ app.post("/api/items/lost", auth, (req, res) => {
       title,
       description,
       location,
-      date,
-      privateDetails: privateDetails || {},
+      date: new Date(date),
       userId: req.user.id,
       userName: req.user.name,
       userEmail: req.user.email,
       status: "open",
+      privateDetails: privateDetails || {},
       createdAt: new Date(),
     };
-
     items.push(item);
-
-    console.log("📱 Lost item reported:", item.title);
-
     res.status(201).json(item);
   } catch (error) {
-    console.error("Report lost error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Report found item
-app.post("/api/items/found", auth, (req, res) => {
+app.post("/api/items/found", authMiddleware, (req, res) => {
   try {
     const { category, title, description, location, date } = req.body;
-
     const item = {
       id: items.length + 1,
       type: "found",
@@ -216,189 +184,175 @@ app.post("/api/items/found", auth, (req, res) => {
       title,
       description,
       location,
-      date,
-      privateDetails: {},
+      date: new Date(date),
       userId: req.user.id,
       userName: req.user.name,
       userEmail: req.user.email,
       status: "open",
+      privateDetails: {},
       createdAt: new Date(),
     };
-
     items.push(item);
-
-    console.log("🔍 Found item reported:", item.title);
-
     res.status(201).json(item);
   } catch (error) {
-    console.error("Report found error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get all items
 app.get("/api/items", (req, res) => {
   try {
-    const { type, category } = req.query;
-    let filteredItems = [...items];
-
-    if (type) {
-      filteredItems = filteredItems.filter((i) => i.type === type);
-    }
-    if (category) {
-      filteredItems = filteredItems.filter((i) => i.category === category);
-    }
-
-    filteredItems = filteredItems
-      .filter((i) => i.status === "open")
-      .slice(0, 50);
-
-    res.json(filteredItems);
+    let filtered = items.filter((i) => i.status === "open");
+    if (req.query.type)
+      filtered = filtered.filter((i) => i.type === req.query.type);
+    if (req.query.category)
+      filtered = filtered.filter((i) => i.category === req.query.category);
+    res.json(filtered.slice(0, 50));
   } catch (error) {
-    console.error("Get items error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get single item
 app.get("/api/items/:id", (req, res) => {
-  try {
-    const item = items.find((i) => i.id === parseInt(req.params.id));
-    if (!item) {
-      return res.status(404).json({ error: "Item not found" });
-    }
-    res.json(item);
-  } catch (error) {
-    console.error("Get item error:", error);
-    res.status(500).json({ error: error.message });
-  }
+  const item = items.find((i) => i.id === parseInt(req.params.id));
+  if (!item) return res.status(404).json({ error: "Item not found" });
+  res.json(item);
 });
 
-// Get user's items
-app.get("/api/users/items", auth, (req, res) => {
-  try {
-    const userItems = items.filter((i) => i.userId === req.user.id);
-    res.json(userItems);
-  } catch (error) {
-    console.error("Get user items error:", error);
-    res.status(500).json({ error: error.message });
-  }
+app.get("/api/users/items", authMiddleware, (req, res) => {
+  res.json(items.filter((i) => i.userId === req.user.id));
 });
 
-// Submit claim
-app.post("/api/claims", auth, (req, res) => {
+// ========== CLAIM ROUTES ==========
+app.post("/api/claims", authMiddleware, (req, res) => {
   try {
     const { itemId, answers } = req.body;
     const item = items.find((i) => i.id === parseInt(itemId));
+    if (!item) return res.status(404).json({ error: "Item not found" });
+    if (item.type !== "found")
+      return res.status(400).json({ error: "Can only claim found items" });
 
-    if (!item) {
-      return res.status(404).json({ error: "Item not found" });
-    }
-
-    // Calculate verification score
-    let score = 0;
-    let total = 0;
-
-    if (item.privateDetails) {
-      for (const [key, answer] of Object.entries(answers)) {
-        if (item.privateDetails[key]) {
-          total += 10;
-          if (answer.toLowerCase() === item.privateDetails[key].toLowerCase()) {
-            score += 10;
-          }
-        }
-      }
-    }
-
-    const confidence = total > 0 ? (score / total) * 100 : 50;
+    const score = calculateScore(answers, item.privateDetails);
+    let status = "pending";
+    if (score >= 70) {
+      status = "approved";
+      item.status = "resolved";
+    } else if (score < 40) status = "rejected";
 
     const claim = {
       id: claims.length + 1,
       itemId: item.id,
       claimantId: req.user.id,
       claimantName: req.user.name,
+      claimantEmail: req.user.email,
       answers,
-      score: confidence,
-      status: confidence >= 70 ? "approved" : "pending",
+      score,
+      status,
       createdAt: new Date(),
     };
-
     claims.push(claim);
-
-    console.log(
-      "📝 Claim submitted for item:",
-      item.title,
-      "Score:",
-      confidence,
-    );
-
-    res.status(201).json({
-      claim,
-      message:
-        confidence >= 70
-          ? "Claim approved! Contact the finder."
-          : "Claim pending review.",
-    });
+    res
+      .status(201)
+      .json({
+        claim,
+        message:
+          status === "approved"
+            ? "Claim approved!"
+            : "Claim submitted for review",
+      });
   } catch (error) {
-    console.error("Claim error:", error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get user's claims
-app.get("/api/users/claims", auth, (req, res) => {
-  try {
-    const userClaims = claims.filter((c) => c.claimantId === req.user.id);
-    res.json(userClaims);
-  } catch (error) {
-    console.error("Get claims error:", error);
-    res.status(500).json({ error: error.message });
-  }
+app.get("/api/users/claims", authMiddleware, (req, res) => {
+  res.json(claims.filter((c) => c.claimantId === req.user.id));
 });
 
-// Root endpoint
-app.get("/", (req, res) => {
+// ========== ADMIN ROUTES ==========
+app.get(
+  "/api/admin/claims/pending",
+  authMiddleware,
+  adminMiddleware,
+  (req, res) => {
+    const pending = claims
+      .filter((c) => c.status === "pending")
+      .map((claim) => {
+        const item = items.find((i) => i.id === claim.itemId);
+        return { ...claim, itemDetails: item };
+      });
+    res.json({ success: true, claims: pending });
+  },
+);
+
+app.put(
+  "/api/admin/claims/:claimId/approve",
+  authMiddleware,
+  adminMiddleware,
+  (req, res) => {
+    const claim = claims.find((c) => c.id === parseInt(req.params.claimId));
+    if (!claim) return res.status(404).json({ error: "Claim not found" });
+    claim.status = "approved";
+    const item = items.find((i) => i.id === claim.itemId);
+    if (item) item.status = "resolved";
+    res.json({ success: true, message: "Claim approved" });
+  },
+);
+
+app.put(
+  "/api/admin/claims/:claimId/reject",
+  authMiddleware,
+  adminMiddleware,
+  (req, res) => {
+    const claim = claims.find((c) => c.id === parseInt(req.params.claimId));
+    if (!claim) return res.status(404).json({ error: "Claim not found" });
+    claim.status = "rejected";
+    claim.adminNotes = req.body.adminNotes || "Rejected by admin";
+    res.json({ success: true, message: "Claim rejected" });
+  },
+);
+
+app.get("/api/admin/stats", authMiddleware, adminMiddleware, (req, res) => {
   res.json({
-    message: "Lost & Found API is running!",
-    endpoints: {
-      health: "GET /api/health",
-      register: "POST /api/auth/register",
-      login: "POST /api/auth/login",
-      items: "GET /api/items",
-      lost: "POST /api/items/lost",
-      found: "POST /api/items/found",
-    },
+    success: true,
     stats: {
-      users: users.length,
-      items: items.length,
-      claims: claims.length,
+      totalUsers: users.length,
+      totalItems: items.length,
+      lostItems: items.filter((i) => i.type === "lost").length,
+      foundItems: items.filter((i) => i.type === "found").length,
+      resolvedItems: items.filter((i) => i.status === "resolved").length,
+      pendingClaims: claims.filter((c) => c.status === "pending").length,
+      approvedClaims: claims.filter((c) => c.status === "approved").length,
+      rejectedClaims: claims.filter((c) => c.status === "rejected").length,
+      recoveryRate: items.length
+        ? Math.round(
+            (items.filter((i) => i.status === "resolved").length /
+              items.length) *
+              100,
+          )
+        : 0,
     },
   });
 });
 
-// Error handler
-app.use((err, req, res, next) => {
-  console.error("Server error:", err);
-  res.status(500).json({ error: "Something went wrong!" });
+// Root
+app.get("/", (req, res) => {
+  res.json({
+    name: "Lost & Found API",
+    version: "1.0.0",
+    endpoints: [
+      "/api/health",
+      "/api/auth/register",
+      "/api/auth/login",
+      "/api/items",
+    ],
+  });
 });
 
 // Start server
 const PORT = 5000;
-app.listen(PORT, () => {
-  console.log(`
-╔══════════════════════════════════════════════════════════╗
-║     🚀 LOST & FOUND API - RUNNING (No MongoDB)          ║
-╠══════════════════════════════════════════════════════════╣
-║  Server: http://localhost:${PORT}                         ║
-║  API:    http://localhost:${PORT}/api                    ║
-║  Health: http://localhost:${PORT}/api/health             ║
-╠══════════════════════════════════════════════════════════╣
-║  📝 Using in-memory storage                             ║
-║  ✅ No MongoDB required for testing                     ║
-╠══════════════════════════════════════════════════════════╣
-║  Test Commands:                                          ║
-║  curl http://localhost:5000/api/health                  ║
-║  curl -X POST http://localhost:5000/api/auth/register   ║
-╚══════════════════════════════════════════════════════════╝
-  `);
+createDefaultAdmin().then(() => {
+  app.listen(PORT, () => {
+    console.log(`\n🚀 Server running on http://localhost:${PORT}`);
+    console.log(`📧 Admin: admin@lostfound.com / admin123\n`);
+  });
 });

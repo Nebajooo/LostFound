@@ -4,52 +4,90 @@ import { useNavigate } from "react-router-dom";
 
 function ReportLost() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
   const [formData, setFormData] = useState({
     category: "",
     title: "",
     description: "",
     location: "",
     date: "",
-    privateDetails: {},
+    privateDetails: {
+      color: "",
+      brand: "",
+      serialNumber: "",
+      uniqueMarks: "",
+    },
   });
-
-  const [verificationData, setVerificationData] = useState({
-    serialNumber: "",
-    uniqueMarks: "",
-    color: "",
-    brand: "",
-  });
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleVerificationChange = (e) => {
-    setVerificationData({
-      ...verificationData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+    if (name in formData.privateDetails) {
+      setFormData({
+        ...formData,
+        privateDetails: {
+          ...formData.privateDetails,
+          [name]: value,
+        },
+      });
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value,
+      });
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setSuccess("");
 
-    // Add private verification details
-    const submitData = {
-      ...formData,
-      privateDetails: verificationData,
-    };
+    // Validation
+    if (
+      !formData.category ||
+      !formData.title ||
+      !formData.description ||
+      !formData.location ||
+      !formData.date
+    ) {
+      setError("Please fill in all required fields");
+      setLoading(false);
+      return;
+    }
 
     try {
-      await axios.post("/items/lost", submitData);
-      navigate("/dashboard");
+      console.log("Submitting lost item:", formData);
+
+      const response = await axios.post("/items/lost", {
+        category: formData.category,
+        title: formData.title,
+        description: formData.description,
+        location: formData.location,
+        date: formData.date,
+        privateDetails: formData.privateDetails,
+      });
+
+      console.log("Response:", response.data);
+      setSuccess("Lost item reported successfully! Redirecting...");
+
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 2000);
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to report item");
+      console.error("Error reporting lost item:", err);
+      if (err.response) {
+        setError(err.response.data?.error || "Server error");
+      } else if (err.request) {
+        setError(
+          "Cannot connect to server. Make sure backend is running on port 5000",
+        );
+      } else {
+        setError("Error: " + err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -58,11 +96,13 @@ function ReportLost() {
   return (
     <div className="report-container">
       <div className="report-header">
-        <h1>Report Lost Item</h1>
+        <h1>📱 Report Lost Item</h1>
         <p>Help us find your lost item by providing detailed information</p>
       </div>
 
-      {error && <div className="error-alert">{error}</div>}
+      {error && <div className="error-alert">⚠️ {error}</div>}
+
+      {success && <div className="success-alert">✅ {success}</div>}
 
       <form onSubmit={handleSubmit} className="report-form">
         <div className="form-section">
@@ -77,14 +117,14 @@ function ReportLost() {
               required
             >
               <option value="">Select category</option>
-              <option value="phone">Phone / Smartphone</option>
-              <option value="wallet">Wallet / Purse</option>
-              <option value="id_card">ID Card / Student Card</option>
-              <option value="keys">Keys</option>
-              <option value="laptop">Laptop / Tablet</option>
-              <option value="bag">Bag / Backpack</option>
-              <option value="books">Books / Notebooks</option>
-              <option value="other">Other</option>
+              <option value="phone">📱 Phone / Smartphone</option>
+              <option value="wallet">👛 Wallet / Purse</option>
+              <option value="id_card">🪪 ID Card / Student Card</option>
+              <option value="keys">🔑 Keys</option>
+              <option value="laptop">💻 Laptop / Tablet</option>
+              <option value="bag">🎒 Bag / Backpack</option>
+              <option value="books">📚 Books / Notebooks</option>
+              <option value="other">📦 Other</option>
             </select>
           </div>
 
@@ -106,7 +146,7 @@ function ReportLost() {
               name="description"
               value={formData.description}
               onChange={handleChange}
-              placeholder="Describe your item in detail..."
+              placeholder="Describe your item in detail (color, size, brand, etc.)..."
               rows="4"
               required
             />
@@ -120,7 +160,7 @@ function ReportLost() {
                 name="location"
                 value={formData.location}
                 onChange={handleChange}
-                placeholder="e.g., Library 3rd floor, Student Union"
+                placeholder="e.g., Library 3rd floor, Student Union, Cafeteria"
                 required
               />
             </div>
@@ -139,21 +179,21 @@ function ReportLost() {
         </div>
 
         <div className="form-section">
-          <h3>Verification Details (Private - Only for Claim Verification)</h3>
+          <h3>🔐 Verification Details (Private)</h3>
           <p className="note">
-            These details help verify you're the real owner. They remain
-            private.
+            These details help verify you're the real owner. They remain private
+            and are only used for claim verification.
           </p>
 
           <div className="form-row">
             <div className="form-group">
-              <label>Serial Number (if applicable)</label>
+              <label>Color</label>
               <input
                 type="text"
-                name="serialNumber"
-                value={verificationData.serialNumber}
-                onChange={handleVerificationChange}
-                placeholder="Last 4 digits is enough"
+                name="color"
+                value={formData.privateDetails.color}
+                onChange={handleChange}
+                placeholder="e.g., Black, Silver, Blue"
               />
             </div>
 
@@ -162,8 +202,8 @@ function ReportLost() {
               <input
                 type="text"
                 name="brand"
-                value={verificationData.brand}
-                onChange={handleVerificationChange}
+                value={formData.privateDetails.brand}
+                onChange={handleChange}
                 placeholder="e.g., Apple, Samsung, Nike"
               />
             </div>
@@ -171,13 +211,13 @@ function ReportLost() {
 
           <div className="form-row">
             <div className="form-group">
-              <label>Color</label>
+              <label>Serial Number (Last 4 digits)</label>
               <input
                 type="text"
-                name="color"
-                value={verificationData.color}
-                onChange={handleVerificationChange}
-                placeholder="e.g., Black, Blue with red case"
+                name="serialNumber"
+                value={formData.privateDetails.serialNumber}
+                onChange={handleChange}
+                placeholder="Last 4 digits of serial number"
               />
             </div>
 
@@ -186,9 +226,9 @@ function ReportLost() {
               <input
                 type="text"
                 name="uniqueMarks"
-                value={verificationData.uniqueMarks}
-                onChange={handleVerificationChange}
-                placeholder="Scratches, stickers, engravings"
+                value={formData.privateDetails.uniqueMarks}
+                onChange={handleChange}
+                placeholder="Scratches, stickers, engravings, etc."
               />
             </div>
           </div>

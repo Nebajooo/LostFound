@@ -263,6 +263,8 @@ app.post("/api/items/lost", authMiddleware, async (req, res) => {
     const { category, title, description, location, date, privateDetails } =
       req.body;
 
+    console.log("Received lost item request:", req.body);
+
     const item = new Item({
       type: "lost",
       category,
@@ -277,8 +279,11 @@ app.post("/api/items/lost", authMiddleware, async (req, res) => {
     });
 
     await item.save();
+    console.log("Lost item saved:", item);
+
     res.status(201).json(item);
   } catch (error) {
+    console.error("Report lost error:", error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -287,6 +292,8 @@ app.post("/api/items/lost", authMiddleware, async (req, res) => {
 app.post("/api/items/found", authMiddleware, async (req, res) => {
   try {
     const { category, title, description, location, date } = req.body;
+
+    console.log("Received found item request:", req.body);
 
     const item = new Item({
       type: "found",
@@ -301,12 +308,14 @@ app.post("/api/items/found", authMiddleware, async (req, res) => {
     });
 
     await item.save();
+    console.log("Found item saved:", item);
+
     res.status(201).json(item);
   } catch (error) {
+    console.error("Report found error:", error);
     res.status(500).json({ error: error.message });
   }
 });
-
 // Get all items
 app.get("/api/items", async (req, res) => {
   try {

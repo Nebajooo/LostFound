@@ -4,6 +4,10 @@ import { useNavigate } from "react-router-dom";
 
 function ReportFound() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
   const [formData, setFormData] = useState({
     category: "",
     title: "",
@@ -11,23 +15,61 @@ function ReportFound() {
     location: "",
     date: "",
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setSuccess("");
+
+    // Validation
+    if (
+      !formData.category ||
+      !formData.title ||
+      !formData.description ||
+      !formData.location ||
+      !formData.date
+    ) {
+      setError("Please fill in all required fields");
+      setLoading(false);
+      return;
+    }
 
     try {
-      await axios.post("/items/found", formData);
-      navigate("/dashboard");
+      console.log("Submitting found item:", formData);
+
+      const response = await axios.post("/items/found", {
+        category: formData.category,
+        title: formData.title,
+        description: formData.description,
+        location: formData.location,
+        date: formData.date,
+      });
+
+      console.log("Response:", response.data);
+      setSuccess("Found item reported successfully! Redirecting...");
+
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 2000);
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to report found item");
+      console.error("Error reporting found item:", err);
+      if (err.response) {
+        setError(err.response.data?.error || "Server error");
+      } else if (err.request) {
+        setError(
+          "Cannot connect to server. Make sure backend is running on port 5000",
+        );
+      } else {
+        setError("Error: " + err.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -36,15 +78,17 @@ function ReportFound() {
   return (
     <div className="report-container">
       <div className="report-header">
-        <h1>Report Found Item</h1>
+        <h1>🔍 Report Found Item</h1>
         <p>Help someone reunite with their lost item</p>
       </div>
 
-      {error && <div className="error-alert">{error}</div>}
+      {error && <div className="error-alert">⚠️ {error}</div>}
+
+      {success && <div className="success-alert">✅ {success}</div>}
 
       <form onSubmit={handleSubmit} className="report-form">
         <div className="form-section">
-          <h3>Item Details</h3>
+          <h3>Item Information</h3>
 
           <div className="form-group">
             <label>Category *</label>
@@ -55,14 +99,14 @@ function ReportFound() {
               required
             >
               <option value="">Select category</option>
-              <option value="phone">Phone / Smartphone</option>
-              <option value="wallet">Wallet / Purse</option>
-              <option value="id_card">ID Card / Student Card</option>
-              <option value="keys">Keys</option>
-              <option value="laptop">Laptop / Tablet</option>
-              <option value="bag">Bag / Backpack</option>
-              <option value="books">Books / Notebooks</option>
-              <option value="other">Other</option>
+              <option value="phone">📱 Phone / Smartphone</option>
+              <option value="wallet">👛 Wallet / Purse</option>
+              <option value="id_card">🪪 ID Card / Student Card</option>
+              <option value="keys">🔑 Keys</option>
+              <option value="laptop">💻 Laptop / Tablet</option>
+              <option value="bag">🎒 Bag / Backpack</option>
+              <option value="books">📚 Books / Notebooks</option>
+              <option value="other">📦 Other</option>
             </select>
           </div>
 
@@ -84,7 +128,7 @@ function ReportFound() {
               name="description"
               value={formData.description}
               onChange={handleChange}
-              placeholder="Describe the item you found..."
+              placeholder="Describe the item you found (color, condition, etc.)..."
               rows="4"
               required
             />
@@ -98,7 +142,7 @@ function ReportFound() {
                 name="location"
                 value={formData.location}
                 onChange={handleChange}
-                placeholder="e.g., Library, Cafeteria, Parking Lot"
+                placeholder="e.g., Library 3rd floor, Student Union, Cafeteria"
                 required
               />
             </div>
@@ -114,11 +158,14 @@ function ReportFound() {
               />
             </div>
           </div>
+        </div>
 
+        <div className="form-section">
           <div className="info-box">
             <p>
-              💡 Tip: Don't include sensitive details like serial numbers. The
-              owner will need to verify those.
+              💡 <strong>Tip:</strong> Don't include sensitive details like
+              serial numbers. The owner will need to verify those during the
+              claim process.
             </p>
           </div>
         </div>

@@ -8,27 +8,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ========== MONGODB CONNECTION ==========
-// Option 1: Local MongoDB
-const MONGODB_URI = "mongodb://localhost:27017/lostfound";
+// === MONGODB CONNECTION ===
 
-// Option 2: MongoDB Atlas (Uncomment and use your connection string)
-// const MONGODB_URI = 'mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/lostfound';
+const MONGODB_URI = "mongodb://localhost:27017/lostfound";
 
 mongoose
   .connect(MONGODB_URI)
   .then(() => console.log("✅ MongoDB Connected Successfully!"))
   .catch((err) => {
-    console.error("❌ MongoDB Connection Error:", err.message);
-    console.log("\n💡 Troubleshooting:");
+    console.error(" MongoDB Connection Error:", err.message);
+    console.log("\n Troubleshooting:");
     console.log("1. Make sure MongoDB is installed");
     console.log("2. Run: net start MongoDB (Windows)");
     console.log("3. Or use MongoDB Atlas cloud version\n");
   });
 
-// ========== MONGOOSE SCHEMAS ==========
+// === MONGOOSE SCHEMAS ======
 
-// User Schema
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
@@ -47,7 +43,6 @@ userSchema.pre("save", async function (next) {
   next();
 });
 
-// Compare password method
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
@@ -96,7 +91,7 @@ const claimSchema = new mongoose.Schema({
 
 const Claim = mongoose.model("Claim", claimSchema);
 
-// ========== MIDDLEWARE ==========
+// === MIDDLEWARE ===
 const authMiddleware = async (req, res, next) => {
   try {
     const token = req.header("Authorization")?.replace("Bearer ", "");
@@ -124,7 +119,7 @@ const adminMiddleware = (req, res, next) => {
   next();
 };
 
-// ========== HELPER FUNCTIONS ==========
+// === HELPER FUNCTIONS ===
 const calculateClaimScore = (answers, privateDetails) => {
   let score = 0;
   let total = 0;
@@ -142,7 +137,7 @@ const calculateClaimScore = (answers, privateDetails) => {
   return total > 0 ? (score / total) * 100 : 0;
 };
 
-// ========== CREATE DEFAULT ADMIN ==========
+// ===CREATE DEFAULT ADMIN ===
 const createDefaultAdmin = async () => {
   const adminExists = await User.findOne({ email: "admin@lostfound.com" });
   if (!adminExists) {
@@ -156,15 +151,15 @@ const createDefaultAdmin = async () => {
       role: "admin",
     });
     await admin.save();
-    console.log("\n✅ Default Admin Created!");
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log("📧 Email: admin@lostfound.com");
-    console.log("🔑 Password: admin123");
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+    console.log("\n Default Admin Created!");
+    console.log("--------------------------------");
+    console.log(" Email: admin@lostfound.com");
+    console.log(" Password: admin123");
+    console.log("---------------------------------\n");
   }
 };
 
-// ========== API ROUTES ==========
+// === API ROUTES ===
 
 // Health check
 app.get("/api/health", async (req, res) => {
@@ -184,7 +179,6 @@ app.get("/api/health", async (req, res) => {
   });
 });
 
-// Register
 app.post("/api/auth/register", async (req, res) => {
   try {
     const { name, email, password, studentId, university, phone } = req.body;
@@ -226,7 +220,6 @@ app.post("/api/auth/register", async (req, res) => {
   }
 });
 
-// Login
 app.post("/api/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -413,7 +406,7 @@ app.get("/api/users/claims", authMiddleware, async (req, res) => {
   }
 });
 
-// ========== ADMIN ROUTES ==========
+// === ADMIN ROUTES ===
 
 // Get pending claims
 app.get(
@@ -542,7 +535,7 @@ app.get("/", (req, res) => {
   });
 });
 
-// ========== START SERVER ==========
+// ==== START SERVER ===
 const PORT = 5000;
 
 // Initialize database and create admin
@@ -551,20 +544,20 @@ const initDatabase = async () => {
 
   app.listen(PORT, () => {
     console.log(`
-╔═══════════════════════════════════════════════════════════════╗
-║                                                               ║
-║   🚀  LOST & FOUND PLATFORM BACKEND                          ║
-║                                                               ║
-║   📡  Server: http://localhost:${PORT}                         ║
-║   🔗  API:    http://localhost:${PORT}/api                    ║
-║   ❤️  Health: http://localhost:${PORT}/api/health             ║
-║                                                               ║
-╠═══════════════════════════════════════════════════════════════╣
-║                                                               ║
-║   💾  Database: MongoDB                                       ║
-║   📊  Status: ${mongoose.connection.readyState === 1 ? "Connected ✅" : "Disconnected ❌"}       ║
-║                                                               ║
-╚═══════════════════════════════════════════════════════════════╝
+|---------------------------------------------------------------|
+|                                                               |
+|     LOST & FOUND PLATFORM BACKEND                             |
+|                                                               |
+|     Server: http://localhost:${PORT}                          |
+|     API:    http://localhost:${PORT}/api                      |
+|     Health: http://localhost:${PORT}/api/health               |
+|                                                               |
+|═══════════════════════════════════════════════════════════════|
+|                                                               |
+|    Database: MongoDB                                          |
+|    Status: ${mongoose.connection.readyState === 1 ? "Connected " : "Disconnected "}       |
+|                                                               |
+|-----------------------------------------------------------------|
     `);
   });
 };
@@ -576,9 +569,9 @@ mongoose.connection.on("connected", () => {
 });
 
 mongoose.connection.on("error", (err) => {
-  console.error("❌ MongoDB Connection Error:", err.message);
+  console.error(" MongoDB Connection Error:", err.message);
   console.log(
-    "\n⚠️  Starting server without MongoDB (using in-memory would go here)\n",
+    "\nStarting server without MongoDB (using in-memory would go here)\n",
   );
   // Still start the server but with warning
   initDatabase();

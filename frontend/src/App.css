@@ -1115,7 +1115,7 @@ body {
 .empty-state {
   text-align: center;
   padding: 3rem;
-  color: var(--gray);
+  color: var(--white);
 }
 
 .empty-state p {

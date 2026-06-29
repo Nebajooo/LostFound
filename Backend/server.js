@@ -564,7 +564,7 @@ const initDatabase = async () => {
 
 // Wait for MongoDB connection before starting
 mongoose.connection.on("connected", () => {
-  console.log("✅ MongoDB Connection Established");
+  console.log(" MongoDB Connection Established");
   initDatabase();
 });
 
@@ -584,7 +584,7 @@ if (mongoose.connection.readyState === 1) {
   // Wait for connection
   setTimeout(() => {
     if (mongoose.connection.readyState !== 1) {
-      console.log("⚠️  MongoDB not connected. Starting server anyway...");
+      console.log(" MongoDB not connected. Starting server anyway...");
       initDatabase();
     }
   }, 5000);

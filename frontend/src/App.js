@@ -8,7 +8,6 @@ import {
 import axios from "axios";
 import "./App.css";
 
-// Components
 import Login from "./components/Login";
 import Register from "./components/Register";
 import Dashboard from "./components/Dashboard";
@@ -19,7 +18,6 @@ import ItemDetail from "./components/ItemDetail";
 import Navbar from "./components/Navbar";
 import AdminDashboard from "./components/AdminDashboard";
 
-// Configure axios
 axios.defaults.baseURL = "http://localhost:5000/api";
 
 function App() {

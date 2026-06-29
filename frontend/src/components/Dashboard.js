@@ -59,7 +59,7 @@ function Dashboard({ user }) {
         : 0,
   };
 
-  if (loading) return <div className="loading">Loading your dashboard...</div>;
+  if (loading) return <div className="loading">Loading the dashboard...</div>;
 
   return (
     <div className="dashboard">

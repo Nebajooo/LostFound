@@ -26,7 +26,7 @@ function AdminDashboard({ user }) {
 
   const fetchClaims = async () => {
     try {
-      // Fetch claims for items in your university
+      // Fetch claims for items in the university
       const response = await axios.get("/api/admin/claims");
       const allClaims = response.data.claims;
 
